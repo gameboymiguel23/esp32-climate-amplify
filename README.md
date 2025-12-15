@@ -15,6 +15,7 @@ flowchart LR
   G["S3 Static Website<br/>Dashboard (HTML/JS)"] -->|"HTTPS fetch"| F
 
 
+
 ## Säkerhet (IoT Security)
 - **Krypterad kommunikation:** ESP32 publicerar via **MQTT över TLS (port 8883)** till AWS IoT Core.
 - **Certifikatsbaserad autentisering:** Enheten använder **X.509 certifikat + privat nyckel** (mTLS) för att autentisera sig mot AWS IoT.
