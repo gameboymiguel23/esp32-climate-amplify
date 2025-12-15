@@ -4,7 +4,7 @@
 En ESP32-enhet skickar temperatur och luftfuktighet till AWS. Data lagras och visualiseras i en webbsida. Vid larm skickas notiser till Discord (extern API).
 
 ## Systemskiss (komponenter och kopplingar)
-```mermaid
+
 flowchart LR
   A[ESP32 Dev Module\nTemp/Hum (simulerad)] -->|MQTT over TLS 8883\nX.509 cert| B[AWS IoT Core]
   B -->|IoT Rule #1: DynamoDB action| C[(DynamoDB\nIoTClimateData)]
