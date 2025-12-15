@@ -13,3 +13,18 @@ flowchart LR
 
   F[Lambda: GetLatestClimate\n(Function URL + CORS)] -->|Query latest| C
   G[S3 Static Website\nDashboard (HTML/JS)] -->|HTTPS fetch| F
+
+## Säkerhet (IoT Security)
+- **Krypterad kommunikation:** ESP32 publicerar via **MQTT över TLS (port 8883)** till AWS IoT Core.
+- **Certifikatsbaserad autentisering:** Enheten använder **X.509 certifikat + privat nyckel** (mTLS) för att autentisera sig mot AWS IoT.
+- **Åtkomstkontroll:** AWS IoT Policy är kopplad till certifikatet/Thing och ger bara nödvändiga rättigheter (least privilege).
+- **Tidsynk:** NTP används i ESP32 för att TLS-certifikat ska kunna valideras korrekt.
+
+## Kommunikation mellan sensor och gateway
+- **Sensor/device:** ESP32 Dev Module (temperatur/fukt simuleras i koden).
+- **Kommunikation:** WiFi → MQTT.
+- **Gateway/ingång till molnet:** AWS IoT Core tar emot MQTT-meddelanden på topic `esp32/climate`.
+
+Exempel payload som skickas:
+```json
+{"temperature": 22.30, "humidity": 54.80}
