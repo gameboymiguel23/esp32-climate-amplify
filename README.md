@@ -6,13 +6,14 @@ En ESP32-enhet skickar temperatur och luftfuktighet till AWS. Data lagras och vi
 ## Systemskiss (komponenter och kopplingar)
 
 flowchart LR
-  A[ESP32 Dev Module\nTemp/Hum (simulerad)] -->|MQTT over TLS 8883\nX.509 cert| B[AWS IoT Core]
-  B -->|IoT Rule #1: DynamoDB action| C[(DynamoDB\nIoTClimateData)]
-  B -->|IoT Rule #2: Invoke Lambda| D[Lambda: DiscordAlert]
-  D -->|HTTPS POST\nDiscord Webhook| E[Discord #iot-alerts]
+  A["ESP32 Dev Module<br/>Temp/Hum (simulerad)"] -->|"MQTT over TLS 8883<br/>X.509 cert"| B["AWS IoT Core"]
+  B -->|"IoT Rule #1: DynamoDB action"| C[("DynamoDB<br/>IoTClimateData")]
+  B -->|"IoT Rule #2: Invoke Lambda"| D["Lambda: DiscordAlert"]
+  D -->|"HTTPS POST<br/>Discord Webhook"| E["Discord #iot-alerts"]
 
-  F[Lambda: GetLatestClimate\n(Function URL + CORS)] -->|Query latest| C
-  G[S3 Static Website\nDashboard (HTML/JS)] -->|HTTPS fetch| F
+  F["Lambda: GetLatestClimate<br/>(Function URL + CORS)"] -->|"Query latest"| C
+  G["S3 Static Website<br/>Dashboard (HTML/JS)"] -->|"HTTPS fetch"| F
+
 
 ## Säkerhet (IoT Security)
 - **Krypterad kommunikation:** ESP32 publicerar via **MQTT över TLS (port 8883)** till AWS IoT Core.
