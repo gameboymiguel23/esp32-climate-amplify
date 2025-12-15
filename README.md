@@ -1,10 +1,3 @@
-# ESP32 Climate Monitor (AWS IoT → DynamoDB → Dashboard + Discord)
-
-## Case
-En ESP32-enhet skickar temperatur och luftfuktighet till AWS. Data lagras i DynamoDB och visualiseras i en webbsida. Vid larm skickas notiser till Discord (extern API) via webhook.
-
----
-
 ## Systemskiss (komponenter och kopplingar)
 
 ```mermaid
@@ -16,5 +9,6 @@ flowchart LR
 
   F["Lambda: GetLatestClimate<br/>(Function URL + CORS)"] -->|"Query latest"| C
   G["S3 Static Website<br/>Dashboard (HTML/JS)"] -->|"HTTPS fetch"| F
+PS fetch"| F
 
 {"temperature": 22.30, "humidity": 54.80}
