@@ -1,4 +1,4 @@
-# ESP32 Climate Monitor (AWS IoT Core + DynamoDB + Dashboard + Discord)
+# Konfigurera AWS IoT Core för ESP32 (temperatur/fukt) + DynamoDB + Dashboard + Discord
 
 ## Innehållsförteckning
 - [Översikt](#översikt)
@@ -6,60 +6,53 @@
 - [Komponenter](#komponenter)
 - [IoT Diagram](#iot-diagram)
 - [Steg-för-steg Instruktioner](#steg-för-steg-instruktioner)
-  - [Steg 1: Förberedelser](#steg-1-förberedelser)
-  - [Steg 2: ESP32 till AWS IoT Core](#steg-2-esp32-till-aws-iot-core)
-  - [Steg 3: Lagring i DynamoDB](#steg-3-lagring-i-dynamodb)
-  - [Steg 4: API för webben Lambda + Function URL](#steg-4-api-för-webben-lambda--function-url)
-  - [Steg 5: Visualisering S3 eller Amplify](#steg-5-visualisering-s3-eller-amplify)
-  - [Steg 6: Extern API integration Discord](#steg-6-extern-api-integration-discord)
-- [Säkerhet och Skalbarhet](#säkerhet-och-skalbarhet)
-- [Kravcheck](#kravcheck)
+  - [Steg 1: Nedladdningar](#steg-1-nedladdningar)
+  - [Steg 2: Uppkoppling](#steg-2-uppkoppling)
+  - [Steg 3: Lagring i databas (DynamoDB)](#steg-3-lagring-i-databas-dynamodb)
+  - [Steg 4: API och hämtning av data (Lambda + Function URL)](#steg-4-api-och-hämtning-av-data-lambda--function-url)
+  - [Steg 5: Visualisering (S3/Amplify)](#steg-5-visualisering-s3amplify)
+  - [Steg 6: Externt API (Discord Webhook)](#steg-6-externt-api-discord-webhook)
+- [Säkerhet/Skalbarhet](#säkerhetskalbarhet)
 - [Slutsats](#slutsats)
 
 ---
 
 ## Översikt
-Detta projekt visar en komplett IoT-lösning där en **ESP32** skickar temperatur- och luftfuktighetsdata till **AWS** via **MQTT över TLS** (port 8883) med **X.509 certifikat** (mTLS).  
-Data lagras i **DynamoDB** och visualiseras i en webbdashboard (S3/Amplify).  
-För att uppfylla kravet på extern API-integration skickas även notiser till **Discord** via **webhook**.
+![IoT Diagram](./img/iot-diagram.png)
+
+*Översikt på diagrammet för IoT-flödet i AWS: ESP32 → AWS IoT Core → DynamoDB → Dashboard, samt Discord-notiser via webhook.*
 
 ---
 
 ## Introduktion
-Målet med projektet är att bygga en IoT-arkitektur som kan:
-- upprätta kommunikation mellan sensor/device och gateway (ESP32 → AWS IoT Core)
-- lagra data i en molndatabas (DynamoDB)
-- visualisera data via molntjänst (S3/Amplify dashboard)
-- inkludera säkerhet (TLS + certifikat + least privilege)
-- skicka data/notiser till ett externt API (Discord webhook)
+Detta projekt beskriver hur man bygger en säker och fungerande IoT-lösning med en **ESP32 Dev Module** som skickar temperatur- och luftfuktighetsdata till **AWS IoT Core** via **MQTT över TLS (8883)** med **certifikatsbaserad autentisering (X.509 / mTLS)**.  
+Data lagras i **DynamoDB** och presenteras i en **webbdashboard** hostad i **S3 (Static Website)**.  
+För att uppfylla kravet på extern API-integration pushas larm/meddelanden vidare till **Discord** via webhook.
+
+Den här lösningen kan användas för att övervaka miljöförhållanden i realtid, t.ex. i rum, förråd eller serverutrymmen.
 
 ---
 
 ## Komponenter
+- AWS-konto (region: eu-north-1 / Stockholm).
+- **AWS IoT Core** (MQTT broker + Things/certifikat + IoT Rules).
+- **ESP32 Dev Module** (Arduino IDE 2.x).
+- (Sensor-data): Temperatur och luftfuktighet **simuleras** i koden (kan ersättas med riktig sensor).
+- **DynamoDB** tabell: `IoTClimateData`.
+- **AWS Lambda**:
+  - `GetLatestClimate` (hämtar senaste datapunkt från DynamoDB).
+  - `DiscordAlert` (skickar notiser till Discord).
+- **S3 Static Website** (dashboard / index.html).
+- **Discord Webhook** (extern API).
 
-### Hårdvara
-- ESP32 Dev Module
+![ESP32 Image](./img/esp32.png)
 
-### Programvara
-- Arduino IDE 2.x (Serial Monitor 115200)
-- Bibliotek: `WiFi.h`, `WiFiClientSecure.h`, `PubSubClient.h`
-
-### AWS tjänster
-- AWS IoT Core (MQTT broker + cert/policy)
-- IoT Rules (routing)
-- DynamoDB (tabell: `IoTClimateData`)
-- AWS Lambda:
-  - `GetLatestClimate` (hämtar senaste värde till webben)
-  - `DiscordAlert` (skickar notiser till Discord)
-- S3 Static Website Hosting (eller Amplify)
-
-### Extern tjänst
-- Discord Webhook (extern API)
+*ESP32 setup*
 
 ---
 
 ## IoT Diagram
-Översikt på IoT-flödet och hur komponenterna är sammankopplade:
+*Hur komponenterna integreras med molnet:*
 
 ```text
 ESP32 Dev Module
@@ -71,7 +64,6 @@ AWS IoT Core (topic: esp32/climate)
   ├─ IoT Rule #1 → DynamoDB (IoTClimateData) [lagring]
   └─ IoT Rule #2 → Lambda (DiscordAlert) → Discord Webhook → #iot-alerts [extern API]
 
-Webbvisualisering:
-Dashboard (S3/Amplify) → HTTPS fetch → Lambda Function URL (GetLatestClimate + CORS) → Query → DynamoDB
+Dashboard:
+S3 Static Website → HTTPS fetch → Lambda Function URL (GetLatestClimate + CORS) → Query → DynamoDB
 
-Dashboard (S3/Amplify) → HTTPS fetch → Lambda Function URL (GetLatestClimate + CORS) → Query → DynamoDB
