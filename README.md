@@ -1,14 +1,15 @@
-# IoT Data Visualization with ESP32, AWS, and Grafana
+# IoT Data Visualization with ESP32, AWS, and S3 Dashboard (+ Discord Alerts)
 
 ## Table of Contents
 - [Overview](#overview)
 - [Requirements](#requirements)
-- [1. ESP32 and DHT11 Sensor Setup](#1-esp32-and-dht11-sensor-setup)
+- [1. ESP32 Sensor Setup](#1-esp32-sensor-setup)
 - [2. AWS IoT Core Setup](#2-aws-iot-core-setup)
 - [3. Publish Data to AWS IoT Core](#3-publish-data-to-aws-iot-core)
 - [4. Store Data in DynamoDB](#4-store-data-in-dynamodb)
-- [5. Data Processing and Transformation with AWS Glue](#5-data-processing-and-transformation-with-aws-glue)
-- [6. Visualize Data with AWS Athena and Grafana](#6-visualize-data-with-aws-athena-and-grafana)
+- [5. Fetch Latest Data with AWS Lambda (Function URL)](#5-fetch-latest-data-with-aws-lambda-function-url)
+- [6. Visualize Data with S3 Static Website](#6-visualize-data-with-s3-static-website)
+- [7. External API Integration: Discord Webhook Alerts](#7-external-api-integration-discord-webhook-alerts)
 - [Conclusion](#conclusion)
 - [Troubleshooting and Optimization](#troubleshooting-and-optimization)
 - [Security Enhancements](#security-enhancements)
@@ -18,120 +19,89 @@
 ## Overview
 ![System Overview](Images/Diagram.png)
 
-*System overview of the IoT data visualization setup.*
+*System overview of the IoT data pipeline and visualization.*
 
-This project demonstrates how to gather environmental data using an ESP32 microcontroller and a DHT11 sensor, transmit this data to AWS IoT Core, store it in DynamoDB, and visualize it using AWS Athena and Grafana.
+This project demonstrates a complete IoT pipeline where an **ESP32 Dev Module** publishes **temperature and humidity** readings to **AWS IoT Core** using **MQTT over TLS (port 8883)** with **X.509 certificate authentication (mTLS)**.  
+Data is stored in **DynamoDB**, the latest reading is retrieved via **AWS Lambda (Function URL + CORS)**, and a simple **web dashboard hosted in S3 Static Website** visualizes the data.  
+To satisfy the “external API” requirement, alerts are also pushed to **Discord** via **Webhook** using a separate IoT Rule + Lambda.
 
 ---
 
 ## Requirements
-- **Hardware**: ESP32 microcontroller, DHT11 temperature and humidity sensor.  
-- **Software**: Arduino IDE, AWS account, Grafana account.  
-- **Libraries**: ESP32 and DHT sensor libraries for Arduino IDE.
+- **Hardware**: ESP32 Dev Module  
+- **Software**: Arduino IDE 2.x, AWS Account (eu-north-1)  
+- **Arduino Libraries**:
+  - `WiFi.h`
+  - `WiFiClientSecure.h`
+  - `PubSubClient.h`
 
 ---
 
-## 1. ESP32 and DHT11 Sensor Setup
-![DHT11 Wiring](Images/Esp32dht11.png)
+## 1. ESP32 Sensor Setup
+This project uses **simulated temperature and humidity** values in the ESP32 sketch (values change slightly over time).  
+(You can replace simulation with a real sensor later without changing the AWS architecture.)
 
-*Wiring diagram of DHT11 sensor with ESP32.*
+### Example payload
+```json
+{"temperature": 22.30, "humidity": 54.80}
+## Kommunikation mellan sensor och gateway
+- **Sensor/device:** ESP32 Dev Module (temperatur/fukt simuleras i koden).
+- **Kommunikation:** WiFi → MQTT.
+- **Gateway/ingång till molnet:** AWS IoT Core tar emot MQTT-meddelanden på topic `esp32/climate`.
 
-The ESP32 is connected to a DHT11 sensor to collect temperature and humidity data. The sketch ([awsdht11.ino](Esp32/awsdht11.ino)) handles sensor data reading and prepares it for transmission.
+## 2. AWS IoT Core Setup (Gateway + säker anslutning)
+1. Skapa en **Thing** i AWS IoT Core (t.ex. `ESP32ClimateClient`).
+2. Skapa/aktivera **X.509 certifikat** och ladda ner:
+   - Device certificate
+   - Private key
+   - Amazon Root CA
+3. Skapa en **IoT Policy** (least privilege) som tillåter t.ex. `iot:Connect` och `iot:Publish` på ditt topic.
+4. Koppla **policy → certifikat** och **certifikat → thing**.
+5. Testa i AWS IoT “MQTT test client” att du ser messages på `esp32/climate`.
 
-### Wiring the Sensor
-1. **VCC to ESP32**: Connect VCC pin of DHT11 to 3.3V.  
-2. **GND to ESP32**: Connect GND pin to GND.  
-3. **Data to ESP32**: Connect Data pin to GPIO 2 (D2).
+## 3. Lagring i DynamoDB
+1. Skapa tabellen **IoTClimateData**
+   - Partition key: `deviceId` (String)
+   - Sort key: `timestamp` (Number, epoch ms)
+2. IoT Rule #1 skriver in i DynamoDB (antingen via DynamoDB action eller via ingest-Lambda).
+3. Verifiera att det kommer nya rader var ~10:e sekund när ESP32 kör.
 
-Ensure secure connections to avoid wiring mistakes.
+## 4. API för webben (Lambda + Function URL)
+1. Lambda `GetLatestClimate` gör en Query i DynamoDB:
+   - `deviceId = "ESP32ClimateClient"`
+   - `ScanIndexForward: false`
+   - `Limit: 1`
+2. Aktivera **Function URL** (Auth = NONE) och **CORS** (Allow-Origin `*` räcker för kursprojekt).
+3. Testa URL i webbläsaren → ska returnera senaste datapunkten som JSON.
 
----
+## 5. Visualisering (S3/Amplify)
+1. Skapa S3-bucket och slå på **Static website hosting**.
+2. Lägg upp dashboard-sidan (HTML/JS) som gör `fetch()` mot Lambda Function URL.
+3. Verifiera att sidan visar aktuell temperatur och luftfuktighet.
 
-## 2. AWS IoT Core Setup
-#### Thing Creation and Security
-![Thing](Images/Thing.png)
+## 6. Extern API-integration (Discord)
+1. Skapa Discord-server + kanal (t.ex. `#iot-alerts`).
+2. Skapa en **webhook** i kanalen och kopiera webhook-URL.
+3. Lambda `DiscordAlert` skickar **HTTPS POST** till webhook-URL (lägg URL som env var `DISCORD_WEBHOOK_URL`).
+4. IoT Rule #2 triggar `DiscordAlert` när nytt message kommer på `esp32/climate` (eller när larmvillkor uppfylls).
+5. Verifiera att meddelanden dyker upp i Discord-kanalen.
 
-Create a 'Thing' in AWS IoT Core representing the ESP32. Generate certificates and keys for secure connection.
+## Säkerhet / IoT Security
+- **MQTT över TLS (8883):** Krypterad transport mellan ESP32 och AWS IoT Core.
+- **mTLS (X.509 + private key):** Certifikatsbaserad autentisering av enheten.
+- **Least privilege:** IoT-policy ger bara nödvändiga rättigheter.
+- **NTP-tidsynk:** Krävs för att TLS-certifikat ska valideras korrekt.
+- **Secrets:** Discord webhook-URL ligger som Lambda environment variable (inte i GitHub).
 
-#### Policy Attachment
-Attach a policy to the certificate, allowing actions like publishing to MQTT topics.
-![Policy](Images/Policy.png)
+## Kravcheck (för godkänt)
+✅ Systemskiss/översikt av komponenter och kopplingar  
+✅ Säkerhetsmekanismer (TLS + certifikat + policy)  
+✅ Data från device (ESP32)  
+✅ Data till AWS (IoT Core)  
+✅ Data lagras i databas (DynamoDB)  
+✅ Data till externt API (Discord webhook)  
+✅ Visualisering i molnet (S3/ev. Amplify)  
+✅ Dokumentation i GitHub (README)
 
----
-
-## 3. Publish Data to AWS IoT Core
-The ESP32 uses MQTT protocol to send sensor data to AWS IoT Core. The sketch connects to Wi-Fi and publishes data to a designated topic.  
-[View the ESP32 Sketch](Esp32/awsdht11.ino)
-
----
-
-## 4. Store Data in DynamoDB
-![DynamoDB Table](Images/DynamoDBTable.png)
-
-Create a DynamoDB table to store sensor data. Use an AWS IoT Rule to trigger a Lambda function to insert new data into the table.  
-![Lambda Setup](Images/Lambdasetup.png)
-
----
-
-## 5. Data Processing and Transformation with AWS Glue
-AWS Glue prepares and transforms IoT data for analysis.
-
-### Setting Up AWS Glue
-#### Data Catalog
-Scan the DynamoDB table with a Glue Crawler to create a table in the Data Catalog.  
-![GlueTable](Images/GlueTable.png)
-
-#### ETL Jobs
-Create ETL jobs to extract data from DynamoDB, transform it, and load it into S3.  
-![GlueFlow](Images/GlueFlow.png)
-
-#### AWS Glue Workflow
-Automate crawling and ETL jobs with a Glue Workflow.
-
----
-
-## 6. Visualize Data with AWS Athena and Grafana
-![Grafana Dashboard](Images/Dashboard.png)
-
-### Setting Up AWS Athena
-Configure Athena to query DynamoDB data. Create a database and table reflecting the DynamoDB structure.  
-![Athena Query](/Images/AthenaQuery.png)
-
-### Integrating Athena with Grafana
-Add Athena as a Grafana data source. Configure IAM roles to allow access.  
-![Athena-Grafana Integration](/Images/Athena-Grafana.png)
-
-### Creating a Grafana Dashboard
-Build dashboards using queries from Athena. Create panels like Time Series graphs, Gauges, and Tables for temperature and humidity.  
-![Grafana Setup](/Images/GrafanaSetup.png)
-
----
-
-## Conclusion
-This project demonstrates a complete IoT data pipeline from sensor to visualization. It highlights AWS capabilities for IoT and Grafana’s flexibility for dashboards.
-
----
-
-## Troubleshooting and Optimization
-- Use Serial Monitor for ESP32 debugging.  
-- Check AWS permissions for IoT Core, DynamoDB, and Athena.  
-- Optimize Athena queries for large datasets.  
-- Verify data types and queries in Grafana.
-
----
-
-## Security Enhancements
-#### 1. Fine-Grained IoT Policies
-Limit devices to minimum necessary actions on MQTT topics.
-
-#### 2. Secure Device Provisioning
-Use AWS IoT Device Defender and Just-in-Time Registration for secure registration.
-
-#### 3. Encrypt Data
-Use TLS for transit, AWS KMS for key management, and enable encryption at rest for DynamoDB and S3.
-
-#### 4. Updates and Patching
-Keep device firmware and software updated.
-
-#### 5. Network Security
-Use VPCs, security groups, and AWS WAF to restrict access.
+## Slutsats
+Projektet visar en komplett IoT-kedja där en ESP32 skickar sensordata säkert via MQTT/TLS till AWS IoT Core. Data lagras i DynamoDB, visualiseras i en webbdashboard och kan även pushas vidare till ett externt API (Discord) för notifieringar. Arkitekturen är enkel men följer riktiga IoT-principer och går att skala upp med fler enheter.
