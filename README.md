@@ -103,9 +103,10 @@ This project uses **simulated temperature and humidity** values in the ESP32 ske
 5. Verifiera att meddelanden dyker upp i Discord-kanalen.
 
 ---
-![image alt](https://github.com/gameboymiguel23/esp32-climate-amplify/blob/bb94812ee9643fd73e182c4819bd82a6025c85eb/esp32.png)
+
 ## Conclusion
 Projektet visar en komplett IoT-kedja där en ESP32 skickar sensordata säkert via MQTT/TLS till AWS IoT Core. Data lagras i DynamoDB, visualiseras i en webbdashboard och kan även pushas vidare till ett externt API (Discord) för notifieringar. Arkitekturen är enkel men följer riktiga IoT-principer och går att skala upp med fler enheter.
+![image alt](https://github.com/gameboymiguel23/esp32-climate-amplify/blob/bb94812ee9643fd73e182c4819bd82a6025c85eb/esp32.png)
 
 ---
 
