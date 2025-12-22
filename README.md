@@ -102,6 +102,8 @@ This project uses **simulated temperature and humidity** values in the ESP32 ske
 4. IoT Rule #2 triggar `DiscordAlert` när nytt message kommer på `esp32/climate` (eller när larmvillkor uppfylls).
 5. Verifiera att meddelanden dyker upp i Discord-kanalen.
 
+![image alt](https://github.com/gameboymiguel23/esp32-climate-amplify/blob/283f17db79e1615c215c1ed3a9bc1b0cbf900bbd/discord.png)
+
 ---
 
 ## Conclusion
