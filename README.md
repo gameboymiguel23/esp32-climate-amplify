@@ -17,7 +17,7 @@
 ---
 
 ## Overview
-![System Overview](Images/Diagram.png)
+![image alt](https://github.com/gameboymiguel23/esp32-climate-amplify/blob/7eecfcc46b1260a819e42ff92f902ee97842723d/aws.png)
 
 *System overview of the IoT data pipeline and visualization.*
 
